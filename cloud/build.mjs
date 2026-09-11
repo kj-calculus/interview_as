@@ -4,4 +4,5 @@ const assets={};for(const name of names)assets['/'+name]={content:fs.readFileSyn
 fs.mkdirSync('dist/server',{recursive:true});fs.mkdirSync('dist/.openai',{recursive:true});
 fs.writeFileSync('dist/server/index.js',fs.readFileSync('cloud/worker.mjs','utf8')+'\nconst assets='+JSON.stringify(assets)+';\nexport default {fetch(request,env){return handle(request,env,assets);}};\n');
 fs.copyFileSync('.openai/hosting.json','dist/.openai/hosting.json');
+fs.cpSync('drizzle','dist/.openai/drizzle',{recursive:true});
 console.log('Built Cloudflare Worker with bundled application assets.');
