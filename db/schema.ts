@@ -8,3 +8,5 @@ export const events=sqliteTable('events',{
 });
 export const sessions=sqliteTable('sessions',{token_hash:text('token_hash').primaryKey(),user_id:text('user_id').notNull().references(()=>users.id),expires:integer('expires').notNull()});
 export const attempts=sqliteTable('login_attempts',{key:text('key').primaryKey(),count:integer('count').notNull(),expires:integer('expires').notNull()});
+
+export const applications=sqliteTable('applications',{student:text('student').primaryKey().references(()=>users.id,{onDelete:'cascade'}),rows:text('rows').notNull()});

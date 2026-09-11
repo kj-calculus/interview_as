@@ -13,3 +13,5 @@ assert.equal((await handle(req(),async()=>new Response('Redirect',{status:302}))
 assert.equal((await handle(req(),async()=>{throw Error('offline')})).status,502);
 assert.equal((await handle(req('state',{method:'GET',body:undefined}),async()=>Response.json({error:'로그인이 필요합니다.'},{status:401}))).status,401);
 console.log('PASS: Vercel gateway routing, session cookie, cross-origin rejection, and upstream failures');
+
+assert.equal((await handle(req('applications',{method:'PUT'}),async(url)=>{assert.ok(url.endsWith('/api/applications'));return Response.json({ok:true});})).status,200);

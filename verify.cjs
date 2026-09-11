@@ -22,6 +22,9 @@ vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);const run=s=>vm.runIn
  run("accounts[1].class='면접 A반, 면접 B반';accounts.push({id:'student.b',role:'학생',name:'B학생',class:'면접 B반'});user=accounts[1];identity=user.id;role=user.role;activeClass='면접 B반';render();");assert.equal(run('visibleStudents()[0].id'),'student.b');assert.ok(nodes.get('#app').innerHTML.includes('data-class="면접 A반"'));
  await run('downloadTemplate()');wb=new ctx.ExcelJS.Workbook();await wb.xlsx.load(await downloaded.arrayBuffer());assert.equal(wb.getWorksheet('배정반 목록').getCell('A2').value,'면접 B반');assert.equal(wb.worksheets[0].getCell('D2').value,'면접 B반');
  run("user=accounts[2];identity=user.id;role=user.role;render();");assert.equal(nodes.get('#app').innerHTML.includes('id="addLesson"'),false);assert.equal(nodes.get('#app').innerHTML.includes('data-tab="accounts"'),false);
+ assert.ok(nodes.get('#app').innerHTML.includes('data-tab="applications"'));
+ const entry=run('applicationsView()');assert.equal((entry.match(/data-application-row=/g)||[]).length,6);assert.ok(entry.includes('바로 면접 응시'));assert.ok(entry.includes('생기부 기반'));
+ run("events.push({...events[0],id:'disabled',application:'student.a:0',inactive:true});selected=identity;");assert.ok(run('timelineView(visibleStudents())').includes('disabled aria-disabled="true"'));
  assert.equal(registered.name,'get_visible_interview_schedule');await assert.rejects(()=>registered.execute({unexpected:true}));await assert.rejects(()=>registered.execute({}),/로그인/);
  console.log('PASS: login rendering, role UI, timeline, XLSX dropdowns, and WebMCP rejection paths (VM; no browser visual QA)');
 })().catch(e=>{console.error(e);process.exitCode=1});
