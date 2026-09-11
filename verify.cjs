@@ -1,0 +1,22 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const nodes=new Map();let registered,downloaded;
+const document={querySelector:s=>{if(!nodes.has(s))nodes.set(s,{innerHTML:'',style:{},close(){},showModal(){}});return nodes.get(s)},querySelectorAll:()=>[],createElement:()=>({click(){}}),modelContext:{registerTool:t=>{registered=t}}};
+const ctx=vm.createContext({document,console,setTimeout,crypto:require('crypto').webcrypto,ExcelJS:require('exceljs'),Blob,URL:{createObjectURL:b=>{downloaded=b;return 'blob:test'},revokeObjectURL(){}},fetch:async()=>({ok:false,status:401,json:async()=>({error:'로그인이 필요합니다.'})})});
+vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);const run=s=>vm.runInContext(s,ctx);
+(async()=>{
+ await new Promise(r=>setImmediate(r));assert.ok(nodes.get('#app').innerHTML.includes('loginForm'));
+ assert.equal(run('accounts.length'),0);assert.equal(run('events.length'),0);
+ run("accounts=[{id:'admin',name:'관리자',role:'관리자',class:''},{id:'teacher.a',name:'교사',role:'교사',class:'면접 A반'},{id:'student.a',number:'30101',name:'학생',role:'학생',class:'면접 A반'}];user=accounts[0];identity=user.id;role=user.role;render();");
+ assert.equal(nodes.get('#app').innerHTML.includes('화면 미리보기'),false);
+ assert.ok(nodes.get('#app').innerHTML.includes('addUniversity'));
+ await run('downloadTemplate()');let wb=new ctx.ExcelJS.Workbook();await wb.xlsx.load(await downloaded.arrayBuffer());
+ assert.equal(wb.worksheets[0].getCell('C2').dataValidation.formulae[0],'"교사,학생"');assert.equal(wb.worksheets[0].getRow(1).getCell(5).text,'아이디');
+ run("user=accounts[1];identity=user.id;role=user.role;render();");await run('downloadTemplate()');wb=new ctx.ExcelJS.Workbook();await wb.xlsx.load(await downloaded.arrayBuffer());
+ assert.equal(wb.worksheets[0].getCell('C2').dataValidation.formulae[0],'"학생"');assert.equal(wb.worksheets[0].getCell('D2').value,'면접 A반');
+ run("selected='student.a';events=[{id:'one',student:selected,type:'interview',univ:'테스트대',major:'학과',date:'2026-11-20',time:'10:00'},{id:'two',student:selected,type:'final',univ:'테스트대',major:'학과',date:'2026-12-05',time:'14:00'}];");
+ const timeline=run('timelineView(visibleStudents())');assert.ok(timeline.indexOf('11월 20일')<timeline.indexOf('12월 5일'));assert.ok(timeline.includes('timeline-cell link'));assert.equal(timeline.includes('1차 합격자 발표'),false);
+ assert.equal(run("esc('<img onerror=alert(1)>')"),'&lt;img onerror=alert(1)&gt;');
+ run("user=accounts[2];identity=user.id;role=user.role;render();");assert.equal(nodes.get('#app').innerHTML.includes('id="addLesson"'),false);assert.equal(nodes.get('#app').innerHTML.includes('data-tab="accounts"'),false);
+ assert.equal(registered.name,'get_visible_interview_schedule');await assert.rejects(()=>registered.execute({unexpected:true}));await assert.rejects(()=>registered.execute({}),/로그인/);
+ console.log('PASS: login rendering, role UI, timeline, XLSX dropdowns, and WebMCP rejection paths (VM; no browser visual QA)');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,8 @@
+node_modules/
+.sites-runtime/
+.env
+data/
+.test-data-*/
+dist/server/
+dist/.openai/
+site-release.tar.gz
