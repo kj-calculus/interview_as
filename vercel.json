@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "node vercel/build.mjs",
+  "outputDirectory": "vercel-public",
+  "rewrites": [{ "source": "/api/:path*", "destination": "/api/proxy?path=:path*" }],
+  "functions": { "api/proxy.mjs": { "maxDuration": 60 } }
+}

@@ -6,3 +6,5 @@ data/
 dist/server/
 dist/.openai/
 site-release.tar.gz
+vercel-public/
+.vercel/
