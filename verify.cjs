@@ -16,6 +16,11 @@ vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);const run=s=>vm.runIn
  run("selected='student.a';events=[{id:'one',student:selected,type:'interview',univ:'테스트대',major:'학과',date:'2026-11-20',time:'10:00'},{id:'two',student:selected,type:'final',univ:'테스트대',major:'학과',date:'2026-12-05',time:'14:00'}];");
  const timeline=run('timelineView(visibleStudents())');assert.ok(timeline.indexOf('11월 20일')<timeline.indexOf('12월 5일'));assert.ok(timeline.includes('timeline-cell link'));assert.equal(timeline.includes('1차 합격자 발표'),false);
  assert.equal(run("esc('<img onerror=alert(1)>')"),'&lt;img onerror=alert(1)&gt;');
+ run("user=accounts[0];identity=user.id;role=user.role;tab='accounts';accountRole='교사';render();");
+ assert.ok(nodes.get('#app').innerHTML.includes('data-account-role="학생"'));assert.ok(nodes.get('#app').innerHTML.includes('data-edit-classes="teacher.a"'));assert.equal(nodes.get('#app').innerHTML.includes('data-delete-account="student.a"'),false);
+ run("accountRole='학생';render();");assert.ok(nodes.get('#app').innerHTML.includes('data-delete-account="student.a"'));assert.equal(nodes.get('#app').innerHTML.includes('data-edit-classes="teacher.a"'),false);
+ run("accounts[1].class='면접 A반, 면접 B반';accounts.push({id:'student.b',role:'학생',name:'B학생',class:'면접 B반'});user=accounts[1];identity=user.id;role=user.role;activeClass='면접 B반';render();");assert.equal(run('visibleStudents()[0].id'),'student.b');assert.ok(nodes.get('#app').innerHTML.includes('data-class="면접 A반"'));
+ await run('downloadTemplate()');wb=new ctx.ExcelJS.Workbook();await wb.xlsx.load(await downloaded.arrayBuffer());assert.equal(wb.getWorksheet('배정반 목록').getCell('A2').value,'면접 B반');assert.equal(wb.worksheets[0].getCell('D2').value,'면접 B반');
  run("user=accounts[2];identity=user.id;role=user.role;render();");assert.equal(nodes.get('#app').innerHTML.includes('id="addLesson"'),false);assert.equal(nodes.get('#app').innerHTML.includes('data-tab="accounts"'),false);
  assert.equal(registered.name,'get_visible_interview_schedule');await assert.rejects(()=>registered.execute({unexpected:true}));await assert.rejects(()=>registered.execute({}),/로그인/);
  console.log('PASS: login rendering, role UI, timeline, XLSX dropdowns, and WebMCP rejection paths (VM; no browser visual QA)');

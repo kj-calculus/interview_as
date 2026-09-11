@@ -5,6 +5,8 @@ const scrypt=require('node:util').promisify(crypto.scrypt);
 const fail=(status,message,extra={})=>Object.assign(new Error(message),{status,...extra});
 async function hashPassword(password){const salt=crypto.randomBytes(16).toString('hex');return `${salt}:${(await scrypt(password,salt,64)).toString('hex')}`;}
 async function matches(password,stored){const [salt,hex]=stored.split(':');return crypto.timingSafeEqual(await scrypt(password,salt,64),Buffer.from(hex,'hex'));}
+const classesOf=u=>[...new Set((u?.class||'').split(',').map(c=>c.trim()).filter(Boolean))];
+const normalizeClass=(value,role)=>{const list=classesOf({class:value});if(!list.length||list.length>20||list.some(c=>c.length>80)||(role==='학생'&&list.length!==1))throw fail(400,'학생은 한 반, 교사는 최대 20개 반을 지정해주세요.');return list.join(', ');};
 const publicUser=u=>({id:u.id,number:u.number,name:u.name,role:u.role,class:u.class,mustChangePassword:!!u.must_change});
 function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),secureCookies=false}={}){
  fs.mkdirSync(dataDir,{recursive:true});const db=new DatabaseSync(path.join(dataDir,'interview.sqlite'));
@@ -16,8 +18,8 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
  PRAGMA user_version=1;`);
  const allUsers=()=>db.prepare('SELECT * FROM users ORDER BY role,class,number,name').all();
  const getUser=id=>db.prepare('SELECT * FROM users WHERE id=?').get(id);
- const canStudent=(u,s)=>s?.role==='학생'&&(u.role==='관리자'||(u.role==='교사'&&u.class===s.class)||(u.role==='학생'&&u.id===s.id));
- const canEvent=(u,e)=>e.type==='lesson'?(u.role==='관리자'||u.class===e.class):canStudent(u,getUser(e.student));
+ const canStudent=(u,s)=>s?.role==='학생'&&(u.role==='관리자'||(u.role==='교사'&&classesOf(u).includes(s.class))||(u.role==='학생'&&u.id===s.id));
+ const canEvent=(u,e)=>e.type==='lesson'?(u.role==='관리자'||classesOf(u).includes(e.class)):canStudent(u,getUser(e.student));
  const state=u=>({user:publicUser(u),accounts:allUsers().filter(a=>u.role==='관리자'||a.id===u.id||canStudent(u,a)).map(publicUser),events:db.prepare('SELECT * FROM events ORDER BY date,time').all().filter(e=>canEvent(u,e))});
  const requireManager=u=>{if(u.role==='학생')throw fail(403,'교사 또는 관리자만 사용할 수 있습니다.');};
  const text=(v,max,required=true)=>{if(typeof v!=='string'||v.trim().length>max||(required&&!v.trim()))throw fail(400,'입력 항목과 길이를 확인해주세요.');return v.trim();};
@@ -26,9 +28,9 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
   const users=allUsers(),ids=new Set(users.map(a=>a.id.toLowerCase())),numbers=new Set(users.filter(a=>a.role==='학생').map(a=>a.number));
   return rows.map((r,i)=>{const a={row:i+2};let error='';try{
    if(!r||typeof r!=='object')throw fail(400,'행을 확인해주세요.');
-   for(const [k,max] of Object.entries({id:40,name:60,number:30,role:10,class:80}))a[k]=text(r[k]??'',max,k!=='number');
-   if(!['교사','학생'].includes(a.role))error='권한은 교사 또는 학생만 가능합니다.';
-   else if(u.role==='교사'&&(a.role!=='학생'||a.class!==u.class))error='본인 배정반의 학생만 등록할 수 있습니다.';
+   for(const [k,max] of Object.entries({id:40,name:60,number:30,role:10,class:1700}))a[k]=text(r[k]??'',max,k!=='number');
+   a.class=normalizeClass(a.class,a.role);if(!['교사','학생'].includes(a.role))error='권한은 교사 또는 학생만 가능합니다.';
+   else if(u.role==='교사'&&(a.role!=='학생'||!classesOf(u).includes(a.class)))error='본인 배정반의 학생만 등록할 수 있습니다.';
    else if(a.role==='학생'&&!a.number)error='학생 학번은 필수입니다.';
    else if(!/^[a-zA-Z0-9._-]{3,40}$/.test(a.id))error='아이디는 영문·숫자·._- 3~40자입니다.';
    else if(ids.has(a.id.toLowerCase()))error='이미 사용 중이거나 파일에서 중복된 아이디입니다.';
@@ -44,8 +46,8 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
   const e={type,date,time,student:null,class:'',univ:'',major:'',title:'',task:''};
   if(type==='lesson'){
    e.class=text(b.class,80);e.title=text(b.title,80);e.task=text(b.task??'',5000,false);
-   if(u.role==='교사'&&e.class!==u.class)throw fail(403,'본인 배정반에만 수업을 등록할 수 있습니다.');
-   if(!allUsers().some(a=>a.class===e.class))throw fail(400,'계정을 먼저 등록해 배정반을 만들어주세요.');
+   if(u.role==='교사'&&!classesOf(u).includes(e.class))throw fail(403,'본인 배정반에만 수업을 등록할 수 있습니다.');
+   if(!allUsers().some(a=>classesOf(a).includes(e.class)))throw fail(400,'계정을 먼저 등록해 배정반을 만들어주세요.');
   }else{const student=getUser(text(b.student,40));if(!canStudent(u,student))throw fail(403,'해당 학생의 일정을 관리할 수 없습니다.');e.student=student.id;e.class=student.class;e.univ=text(b.univ,100);e.major=text(b.major??'',100,false);}
   return e;
  }
@@ -89,6 +91,13 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
     }
     if(route==='/api/accounts/reset-password'&&req.method==='POST'){
      requireManager(u);const b=await body(req),target=getUser(text(b.id,40));if(!target||target.role==='관리자'||!(u.role==='관리자'||canStudent(u,target)))throw fail(403,'이 계정의 비밀번호를 초기화할 수 없습니다.');const password='777777',hash=await hashPassword(password);db.prepare('UPDATE users SET password_hash=?,must_change=1 WHERE id=?').run(hash,target.id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(target.id);return json(200,{credentials:[{...publicUser(target),password}]});
+    }
+
+    if(route==='/api/accounts/classes'&&req.method==='POST'){
+     if(u.role!=='관리자')throw fail(403,'관리자만 교사의 배정반을 변경할 수 있습니다.');const b=await body(req),target=getUser(text(b.id,40));if(!target||target.role!=='교사')throw fail(404,'교사 계정을 찾을 수 없습니다.');const classes=normalizeClass(text(b.class,1700),'교사');db.prepare('UPDATE users SET class=? WHERE id=?').run(classes,target.id);return json(200,{ok:true});
+    }
+    if(route==='/api/accounts/delete'&&req.method==='POST'){
+     if(u.role!=='관리자')throw fail(403,'관리자만 계정을 삭제할 수 있습니다.');const b=await body(req),target=getUser(text(b.id,40));if(!target)throw fail(404,'계정을 찾을 수 없습니다.');if(target.role==='관리자')throw fail(403,'관리자 계정은 삭제할 수 없습니다.');db.exec('BEGIN IMMEDIATE');try{db.prepare('DELETE FROM sessions WHERE user_id=?').run(target.id);db.prepare('DELETE FROM events WHERE student=?').run(target.id);db.prepare('DELETE FROM users WHERE id=?').run(target.id);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}return json(200,{ok:true});
     }
     if(route==='/api/events'&&req.method==='POST'){const e=validateEvent(u,await body(req)),id=crypto.randomUUID();db.prepare('INSERT INTO events(id,type,student,class,univ,major,date,time,title,task) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,e.type,e.student,e.class,e.univ,e.major,e.date,e.time,e.title,e.task);return json(201,{id});}
     const m=route.match(/^\/api\/events\/([a-zA-Z0-9-]+)$/);
