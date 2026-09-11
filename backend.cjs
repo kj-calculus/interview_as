@@ -83,12 +83,12 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
     if(route==='/api/accounts/validate'&&req.method==='POST'){const b=await body(req);return json(200,{rows:validateRows(u,b.rows)});}
     if(route==='/api/accounts'&&req.method==='POST'){
      const b=await body(req),rows=validateRows(u,b.rows);if(rows.some(a=>a.error))throw fail(400,'등록 오류를 수정해주세요.',{rows});
-     const credentials=[];for(const r of rows){const password=crypto.randomBytes(9).toString('base64url');credentials.push({...r,password,hash:await hashPassword(password)});}
+     const credentials=[];for(const r of rows){const password='777777';credentials.push({...r,password,hash:await hashPassword(password)});}
      db.exec('BEGIN IMMEDIATE');try{const again=validateRows(u,b.rows);if(again.some(a=>a.error))throw fail(409,'다른 작업에서 계정이 등록되었습니다. 다시 확인해주세요.',{rows:again});const insert=db.prepare('INSERT INTO users(id,number,name,role,class,password_hash,must_change) VALUES(?,?,?,?,?,?,1)');for(const r of credentials)insert.run(r.id,r.number,r.name,r.role,r.class,r.hash);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
      return json(201,{credentials:credentials.map(({hash,error,row,...r})=>r)});
     }
     if(route==='/api/accounts/reset-password'&&req.method==='POST'){
-     requireManager(u);const b=await body(req),target=getUser(text(b.id,40));if(!target||target.role==='관리자'||!(u.role==='관리자'||canStudent(u,target)))throw fail(403,'이 계정의 비밀번호를 초기화할 수 없습니다.');const password=crypto.randomBytes(9).toString('base64url'),hash=await hashPassword(password);db.prepare('UPDATE users SET password_hash=?,must_change=1 WHERE id=?').run(hash,target.id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(target.id);return json(200,{credentials:[{...publicUser(target),password}]});
+     requireManager(u);const b=await body(req),target=getUser(text(b.id,40));if(!target||target.role==='관리자'||!(u.role==='관리자'||canStudent(u,target)))throw fail(403,'이 계정의 비밀번호를 초기화할 수 없습니다.');const password='777777',hash=await hashPassword(password);db.prepare('UPDATE users SET password_hash=?,must_change=1 WHERE id=?').run(hash,target.id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(target.id);return json(200,{credentials:[{...publicUser(target),password}]});
     }
     if(route==='/api/events'&&req.method==='POST'){const e=validateEvent(u,await body(req)),id=crypto.randomUUID();db.prepare('INSERT INTO events(id,type,student,class,univ,major,date,time,title,task) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,e.type,e.student,e.class,e.univ,e.major,e.date,e.time,e.title,e.task);return json(201,{id});}
     const m=route.match(/^\/api\/events\/([a-zA-Z0-9-]+)$/);
