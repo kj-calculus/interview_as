@@ -15,3 +15,5 @@ assert.equal((await handle(req('state',{method:'GET',body:undefined}),async()=>R
 console.log('PASS: Vercel gateway routing, session cookie, cross-origin rejection, and upstream failures');
 
 assert.equal((await handle(req('applications',{method:'PUT'}),async(url)=>{assert.ok(url.endsWith('/api/applications'));return Response.json({ok:true});})).status,200);
+
+const binary=await handle(req('resources/files/abcdef',{method:'GET',body:undefined}),async()=>new Response(new Uint8Array([0,255,10]),{headers:{'Content-Type':'application/octet-stream','Content-Disposition':'attachment; filename="test.bin"'}}));assert.equal(binary.status,200);assert.deepEqual(new Uint8Array(await binary.arrayBuffer()),new Uint8Array([0,255,10]));assert.match(binary.headers.get('content-disposition'),/attachment/);

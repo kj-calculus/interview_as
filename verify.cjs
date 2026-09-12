@@ -25,6 +25,10 @@ vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);const run=s=>vm.runIn
  assert.ok(nodes.get('#app').innerHTML.includes('data-tab="applications"'));
  const entry=run('applicationsView()');assert.equal((entry.match(/data-application-row=/g)||[]).length,6);assert.ok(entry.includes('바로 면접 응시'));assert.ok(entry.includes('생기부 기반'));
  run("events.push({...events[0],id:'disabled',application:'student.a:0',inactive:true});selected=identity;");assert.ok(run('timelineView(visibleStudents())').includes('disabled aria-disabled="true"'));
+ assert.ok(nodes.get('#app').innerHTML.includes('data-tab="resources"'));
+ assert.equal(run('calendarView([])').includes('data-add-date='),false);
+ run("role='교사';identity='teacher.a';");assert.ok(run('calendarView([])').includes('data-add-date='));
+ run("resourcePosts=[{id:'abc',title:'<script>bad</script>',content:'x',author_name:'교사',created_at:'2026-09-12',files:[]}];");assert.ok(run('resourcesView()').includes('&lt;script&gt;bad&lt;/script&gt;'));
  assert.equal(registered.name,'get_visible_interview_schedule');await assert.rejects(()=>registered.execute({unexpected:true}));await assert.rejects(()=>registered.execute({}),/로그인/);
  console.log('PASS: login rendering, role UI, timeline, XLSX dropdowns, and WebMCP rejection paths (VM; no browser visual QA)');
 })().catch(e=>{console.error(e);process.exitCode=1});

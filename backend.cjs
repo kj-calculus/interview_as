@@ -17,11 +17,14 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
  CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),expires INTEGER NOT NULL);
  PRAGMA user_version=1;`);
  db.exec('CREATE TABLE IF NOT EXISTS applications(student TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,rows TEXT NOT NULL)');
- let validateApplications,applicationEvents;
+ for(const [name,value] of [['lesson_kind',"''"],['teacher_name',"''"],['target_ids',"'null'"]])if(!db.prepare('PRAGMA table_info(events)').all().some(c=>c.name===name))db.exec('ALTER TABLE events ADD COLUMN '+name+' TEXT NOT NULL DEFAULT '+value);
+ db.exec('CREATE TABLE IF NOT EXISTS resource_posts(id TEXT PRIMARY KEY,author_id TEXT NOT NULL,author_name TEXT NOT NULL,title TEXT NOT NULL,content TEXT NOT NULL,created_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS resource_files(id TEXT PRIMARY KEY,post_id TEXT NOT NULL REFERENCES resource_posts(id) ON DELETE CASCADE,name TEXT NOT NULL,size INTEGER NOT NULL)');
+ const storage=require('./local-storage.cjs').adapters(db,dataDir);
+ let validateApplications,applicationEvents,lessonVisible,lessonFields,resourceRoute;
  const allUsers=()=>db.prepare('SELECT * FROM users ORDER BY role,class,number,name').all();
  const getUser=id=>db.prepare('SELECT * FROM users WHERE id=?').get(id);
  const canStudent=(u,s)=>s?.role==='학생'&&(u.role==='관리자'||(u.role==='교사'&&classesOf(u).includes(s.class))||(u.role==='학생'&&u.id===s.id));
- const canEvent=(u,e)=>e.type==='lesson'?(u.role==='관리자'||classesOf(u).includes(e.class)):canStudent(u,getUser(e.student));
+ const canEvent=(u,e)=>e.type==='lesson'?lessonVisible(u,e):canStudent(u,getUser(e.student));
  const oldState=u=>({user:publicUser(u),accounts:allUsers().filter(a=>u.role==='관리자'||a.id===u.id||canStudent(u,a)).map(publicUser),events:db.prepare('SELECT * FROM events ORDER BY date,time').all().filter(e=>canEvent(u,e))});
  const state=u=>{const result=oldState(u);const applications=db.prepare('SELECT * FROM applications').all().filter(a=>canStudent(u,getUser(a.student))).map(a=>({...a,rows:JSON.parse(a.rows)}));return {...result,applications,events:[...result.events,...applicationEvents(applications,result.accounts)]};};
  const requireManager=u=>{if(u.role==='학생')throw fail(403,'교사 또는 관리자만 사용할 수 있습니다.');};
@@ -41,7 +44,7 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
    ids.add(a.id.toLowerCase());if(a.role==='학생')numbers.add(a.number);
   }catch(e){error=e.message;}return {...a,error};});
  }
- function validateEvent(u,b){
+ function validateEvent(u,b,old){
   requireManager(u);const type=text(b.type,20),date=text(b.date,10),time=text(b.time,5);
   if(!['lesson','first','interview','final'].includes(type))throw fail(400,'일정 종류를 확인해주세요.');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date<'2000-01-01'||date>'2100-12-31')throw fail(400,'올바른 날짜를 입력해주세요.');
@@ -52,14 +55,14 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
    if(u.role==='교사'&&!classesOf(u).includes(e.class))throw fail(403,'본인 배정반에만 수업을 등록할 수 있습니다.');
    if(!allUsers().some(a=>classesOf(a).includes(e.class)))throw fail(400,'계정을 먼저 등록해 배정반을 만들어주세요.');
   }else{const student=getUser(text(b.student,40));if(!canStudent(u,student))throw fail(403,'해당 학생의 일정을 관리할 수 없습니다.');e.student=student.id;e.class=student.class;e.univ=text(b.univ,100);e.major=text(b.major??'',100,false);}
-  return e;
+  if(type==='lesson')Object.assign(e,lessonFields(u,b,allUsers(),old));return e;
  }
  const tokenHash=t=>crypto.createHash('sha256').update(t).digest('hex');
  function session(req){const token=(req.headers.cookie||'').split(';').map(c=>c.trim()).find(c=>c.startsWith('interview_session='))?.slice('interview_session='.length);if(!token||!/^[a-f0-9]{64}$/.test(token))return null;return db.prepare('SELECT users.*,sessions.token_hash FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=? AND expires>?').get(tokenHash(token),Date.now());}
  const cookie=(token,age)=>`interview_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secureCookies?'; Secure':''}`;
- async function body(req){if(req.headers['content-type']?.split(';')[0]!=='application/json'||req.headers['x-interview-request']!=='1')throw fail(415,'올바른 요청 형식이 아닙니다.');let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>1024*1024)throw fail(413,'요청이 너무 큽니다.');chunks.push(chunk);}try{const b=JSON.parse(Buffer.concat(chunks).toString());if(!b||Array.isArray(b)||typeof b!=='object')throw Error();return b;}catch{throw fail(400,'입력 내용을 확인해주세요.');}}
+ async function body(req){if(req.headers['content-type']?.split(';')[0]!=='application/json'||req.headers['x-interview-request']!=='1')throw fail(415,'올바른 요청 형식이 아닙니다.');let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>(req.url.startsWith('/api/resources')?3*1024*1024:1024*1024))throw fail(413,'요청이 너무 큽니다.');chunks.push(chunk);}try{const b=JSON.parse(Buffer.concat(chunks).toString());if(!b||Array.isArray(b)||typeof b!=='object')throw Error();return b;}catch{throw fail(400,'입력 내용을 확인해주세요.');}}
  const attempts=new Map();
- const ready=(async()=>{({validateApplications,applicationEvents}=await import('./applications.mjs'));if(!getUser('admin'))db.prepare('INSERT INTO users(id,number,name,role,class,password_hash) VALUES(?,?,?,?,?,?)').run('admin','','관리자','관리자','',await hashPassword(process.env.ADMIN_INITIAL_PASSWORD||'admin123'));})();
+ const ready=(async()=>{({validateApplications,applicationEvents}=await import('./applications.mjs'));({lessonVisible,lessonFields}=await import('./school.mjs'));({resourceRoute}=await import('./resources.mjs'));if(!getUser('admin'))db.prepare('INSERT INTO users(id,number,name,role,class,password_hash) VALUES(?,?,?,?,?,?)').run('admin','','관리자','관리자','',await hashPassword(process.env.ADMIN_INITIAL_PASSWORD||'admin123'));})();
  const dummy=hashPassword(crypto.randomBytes(24).toString('hex'));
  const server=http.createServer(async(req,res)=>{
   const json=(status,value)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));};
@@ -84,6 +87,7 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
      const b=await body(req),old=text(b.currentPassword,128),next=text(b.newPassword,128);if(next.length<8)throw fail(400,'새 비밀번호는 8자 이상 입력해주세요.');if(old===next)throw fail(400,'현재 비밀번호와 다른 비밀번호를 입력해주세요.');if(!await matches(old,u.password_hash))throw fail(400,'현재 비밀번호가 올바르지 않습니다.');const hash=await hashPassword(next);if(getUser(u.id).password_hash!==u.password_hash)throw fail(409,'비밀번호가 변경되었습니다. 다시 로그인해주세요.');db.prepare('UPDATE users SET password_hash=?,must_change=0 WHERE id=?').run(hash,u.id);db.prepare('DELETE FROM sessions WHERE user_id=? AND token_hash<>?').run(u.id,u.token_hash);return json(200,{ok:true});
     }
     if(u.must_change)throw fail(403,'처음 로그인하면 비밀번호를 변경해주세요.',{code:'PASSWORD_CHANGE_REQUIRED'});
+    if(route.startsWith('/api/resources')){const request={url:'http://localhost'+req.url,method:req.method};const result=await resourceRoute(request,u,storage.DB,storage.FILES,()=>body(req));res.writeHead(result.status,Object.fromEntries(result.headers));return res.end(Buffer.from(await result.arrayBuffer()));}
     if(route==='/api/state'&&req.method==='GET')return json(200,state(u));
     if(route==='/api/applications'&&req.method==='PUT'){if(u.role!=='학생')throw fail(403,'학생 본인만 지원 정보를 입력할 수 있습니다.');const b=await body(req);if(b.student&&b.student!==u.id)throw fail(403,'본인 지원 정보만 입력할 수 있습니다.');const rows=validateApplications(b.rows);db.prepare('INSERT INTO applications(student,rows) VALUES(?,?) ON CONFLICT(student) DO UPDATE SET rows=excluded.rows').run(u.id,JSON.stringify(rows));return json(200,{ok:true});}
     if(route==='/api/accounts/validate'&&req.method==='POST'){const b=await body(req);return json(200,{rows:validateRows(u,b.rows)});}
@@ -103,11 +107,11 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
     if(route==='/api/accounts/delete'&&req.method==='POST'){
      if(u.role!=='관리자')throw fail(403,'관리자만 계정을 삭제할 수 있습니다.');const b=await body(req),target=getUser(text(b.id,40));if(!target)throw fail(404,'계정을 찾을 수 없습니다.');if(target.role==='관리자')throw fail(403,'관리자 계정은 삭제할 수 없습니다.');db.exec('BEGIN IMMEDIATE');try{db.prepare('DELETE FROM sessions WHERE user_id=?').run(target.id);db.prepare('DELETE FROM events WHERE student=?').run(target.id);db.prepare('DELETE FROM users WHERE id=?').run(target.id);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}return json(200,{ok:true});
     }
-    if(route==='/api/events'&&req.method==='POST'){const e=validateEvent(u,await body(req)),id=crypto.randomUUID();db.prepare('INSERT INTO events(id,type,student,class,univ,major,date,time,title,task) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,e.type,e.student,e.class,e.univ,e.major,e.date,e.time,e.title,e.task);return json(201,{id});}
+    if(route==='/api/events'&&req.method==='POST'){const e=validateEvent(u,await body(req)),id=crypto.randomUUID();db.prepare('INSERT INTO events(id,type,student,class,univ,major,date,time,title,task,lesson_kind,teacher_name,target_ids) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,e.type,e.student,e.class,e.univ,e.major,e.date,e.time,e.title,e.task,e.lesson_kind||'',e.teacher_name||'',e.target_ids||'null');return json(201,{id});}
     const m=route.match(/^\/api\/events\/([a-zA-Z0-9-]+)$/);
     if(m&&['PUT','DELETE'].includes(req.method)){
      requireManager(u);const b=await body(req),old=db.prepare('SELECT * FROM events WHERE id=?').get(m[1]);if(!old||!canEvent(u,old))throw fail(404,'일정을 찾을 수 없습니다.');
-     if(req.method==='DELETE')db.prepare('DELETE FROM events WHERE id=?').run(old.id);else{const e=validateEvent(u,b);db.prepare('UPDATE events SET type=?,student=?,class=?,univ=?,major=?,date=?,time=?,title=?,task=? WHERE id=?').run(e.type,e.student,e.class,e.univ,e.major,e.date,e.time,e.title,e.task,old.id);}return json(200,{ok:true});
+     if(req.method==='DELETE')db.prepare('DELETE FROM events WHERE id=?').run(old.id);else{const e=validateEvent(u,b,old);db.prepare('UPDATE events SET type=?,student=?,class=?,univ=?,major=?,date=?,time=?,title=?,task=?,lesson_kind=?,teacher_name=?,target_ids=? WHERE id=?').run(e.type,e.student,e.class,e.univ,e.major,e.date,e.time,e.title,e.task,e.lesson_kind||'',e.teacher_name||'',e.target_ids||'null',old.id);}return json(200,{ok:true});
     }
     throw fail(404,'요청한 기능을 찾을 수 없습니다.');
    }

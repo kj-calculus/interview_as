@@ -15,6 +15,13 @@
       "when": 1789169747941,
       "tag": "0001_many_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789172950683,
+      "tag": "0002_parallel_warhawk",
+      "breakpoints": true
     }
   ]
 }
