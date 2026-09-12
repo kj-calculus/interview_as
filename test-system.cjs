@@ -26,7 +26,7 @@ const row=(id,role,cls,number='')=>({id,name:id,role,class:cls,number});
  equal((await req('/api/accounts',{cookie:admin,method:'POST',body:{rows:[row('fresh.student','학생','A반','30105'),row('duplicate.student','학생','B반','30101')]}})).status,400);
  equal((await req('/api/state',{cookie:admin})).data.accounts.some(a=>a.id==='fresh.student'),false);
  const result=await req('/api/accounts',{cookie:teacher,method:'POST',body:{rows:[row('new.student','학생','A반','30105')]}});equal(result.status,201);
- const lesson={type:'lesson',class:'A반',title:'모의면접',date:'2026-11-12',time:'16:30',task:'지원 동기 준비'};
+ const lesson={type:'lesson',class:'A반',title:'모의면접',date:'2026-11-12',time:'7교시',task:'지원 동기 준비'};
  const createLesson=await req('/api/events',{cookie:teacher,method:'POST',body:lesson});equal(createLesson.status,201);
  equal((await req('/api/events',{cookie:teacher,method:'POST',body:{...lesson,class:'B반'}})).status,403);
  equal((await req('/api/events',{cookie:student,method:'POST',body:lesson})).status,403);

@@ -1,6 +1,6 @@
 // Vercel serves the UI and API gateway; the existing authenticated service keeps its D1 data.
 const backend='https://interview-on-school.tkagmd1.chatgpt.site';
-const allowed=/^(?:login|logout|me|password|state|applications|resources(?:\/(?:files\/)?[a-f0-9-]+)?|accounts(?:\/(?:validate|reset-password|classes|delete))?|events(?:\/[a-zA-Z0-9-]+)?)$/;
+const allowed=/^(?:login|logout|me|password|state|applications|availability|resources(?:\/(?:files\/)?[a-f0-9-]+)?|accounts(?:\/(?:validate|reset-password|classes|delete))?|events(?:\/[a-zA-Z0-9-]+)?)$/;
 export async function handle(request,send=fetch){
  const url=new URL(request.url);
  const path=url.searchParams.get('path')||url.pathname.replace(/^\/api\//,'');

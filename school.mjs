@@ -12,3 +12,8 @@ export function lessonFields(u,b,students,old){
  if(ids!==null){if(!Array.isArray(ids)||!ids.length||ids.length>500||ids.some(id=>typeof id!=='string'||!students.some(s=>s.role==='학생'&&s.id===id&&s.class===b.class)))bad('해당 반의 학생을 한 명 이상 선택해주세요.');ids=[...new Set(ids)];}
  return {lesson_kind:kind,teacher_name,target_ids:JSON.stringify(ids),...(kind?{title:kind==='2차-개별지도'?`${teacher_name} ${kind}`:kind}:{})};
 }
+export function validateAvailability(b){
+ const days=b.days,note=b.note??'';
+ if(!Array.isArray(days)||days.length>5||days.some(d=>!Number.isInteger(d)||d<1||d>5)||typeof note!=='string'||note.length>2000)throw Object.assign(new Error('불가 요일과 비고(최대 2,000자)를 확인해주세요.'),{status:400});
+ return {days:[...new Set(days)].sort(),note:note.trim()};
+}

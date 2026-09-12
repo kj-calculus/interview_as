@@ -11,5 +11,7 @@ export const attempts=sqliteTable('login_attempts',{key:text('key').primaryKey()
 
 export const applications=sqliteTable('applications',{student:text('student').primaryKey().references(()=>users.id,{onDelete:'cascade'}),rows:text('rows').notNull()});
 
-export const resourcePosts=sqliteTable('resource_posts',{id:text('id').primaryKey(),author_id:text('author_id').notNull(),author_name:text('author_name').notNull(),title:text('title').notNull(),content:text('content').notNull(),created_at:text('created_at').notNull()});
+export const resourcePosts=sqliteTable('resource_posts',{id:text('id').primaryKey(),author_id:text('author_id').notNull(),author_name:text('author_name').notNull(),title:text('title').notNull(),content:text('content').notNull(),created_at:text('created_at').notNull(),target_ids:text('target_ids').notNull().default('null')});
 export const resourceFiles=sqliteTable('resource_files',{id:text('id').primaryKey(),post_id:text('post_id').notNull().references(()=>resourcePosts.id,{onDelete:'cascade'}),name:text('name').notNull(),size:integer('size').notNull()});
+
+export const availability=sqliteTable('availability',{student:text('student').primaryKey().references(()=>users.id,{onDelete:'cascade'}),days:text('days').notNull(),note:text('note').notNull()});
