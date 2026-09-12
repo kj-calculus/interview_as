@@ -22,6 +22,6 @@ export function validateApplications(rows) {
 export function applicationEvents(applications,accounts) {
  return applications.flatMap(({student,rows})=>rows.flatMap((r,slot)=>!r.univ?[]:['first','interview','final'].flatMap(type=>{
   const date=r[type+'Date'];if(!date||type==='first'&&r.direct)return [];
-  return [{id:`application-${student}-${slot}-${type}`,application:`${student}:${slot}`,student,class:accounts.find(a=>a.id===student)?.class||'',type,date,time:'',univ:r.univ,major:r.major,admission:r.admission,interviewType:r.interviewType,result:type==='first'?r.firstResult:type==='final'?r.finalResult:'',direct:r.direct,inactive:type!=='first'&&r.firstResult==='불합격',title:'',task:''}];
+  return [{id:`application-${student}-${slot}-${type}`,application:`${student}:${slot}`,slot,student,class:accounts.find(a=>a.id===student)?.class||'',type,date,time:'',univ:r.univ,major:r.major,admission:r.admission,interviewType:r.interviewType,result:type==='first'?r.firstResult:type==='final'?r.finalResult:'',direct:r.direct,inactive:type!=='first'&&r.firstResult==='불합격',title:'',task:''}];
  })));
 }

@@ -10,7 +10,17 @@ export function lessonFields(u,b,students,old){
  const teacher_name=old?.teacher_name||u.name;
  let ids=b.target_ids===undefined?JSON.parse(old?.target_ids||'null'):b.target_ids;
  if(ids!==null){if(!Array.isArray(ids)||!ids.length||ids.length>500||ids.some(id=>typeof id!=='string'||!students.some(s=>s.role==='학생'&&s.id===id&&s.class===b.class)))bad('해당 반의 학생을 한 명 이상 선택해주세요.');ids=[...new Set(ids)];}
- return {lesson_kind:kind,teacher_name,target_ids:JSON.stringify(ids),...(kind?{title:kind==='2차-개별지도'?`${teacher_name} ${kind}`:kind}:{})};
+ return {lesson_kind:kind,teacher_name,teacher_id:old?old.teacher_id||'':u.id,target_ids:JSON.stringify(ids),...(kind?{title:kind==='2차-개별지도'?`${teacher_name} ${kind}`:kind}:{})};
+}
+export function decorateEvents(events,users){
+ return events.map(e=>{
+  if(e.type==='lesson'){
+   const matching=users.filter(u=>u.role!=='학생'&&u.name===e.teacher_name&&(u.role==='관리자'||(u.class||'').split(',').map(c=>c.trim()).includes(e.class)));
+   return {...e,teacher_id:e.teacher_id||(matching.length===1?matching[0].id:'')};
+  }
+  const rejected=events.some(first=>first.type==='first'&&first.result==='불합격'&&first.student===e.student&&first.univ===e.univ&&first.major===e.major);
+  return {...e,inactive:e.type!=='first'&&rejected};
+ });
 }
 export function validateAvailability(b){
  const days=b.days,note=b.note??'';
