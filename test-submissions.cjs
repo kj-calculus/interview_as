@@ -49,5 +49,12 @@ const migrationDb=new (require('node:sqlite').DatabaseSync)(':memory:');migratio
  await req('/api/events/'+oldLesson,c['teacher.a'],'DELETE',{});assert.equal((await state(c['student.a'])).submissions.length,1);
  await req('/api/accounts/delete',admin,'POST',{id:'student.a'});assert.equal((await state(admin)).submissions.length,0);assert.equal((await req('/api/submissions/files/'+file.id,admin)).status,404);
  assert.equal((await req('/api/submissions',c['student.b'],'POST',{...payload,event:group})).status,201);assert.equal((await state(admin)).submissions.length,1);
+
+ const deletedSubmission=(await state(c['student.b'])).submissions[0],deletedFile=deletedSubmission.files[0];
+ for(const cookie of [c['student.b'],c['teacher.a'],c['teacher.c']])assert.equal((await req('/api/submissions/assignments/'+group,cookie,'DELETE',{})).status,403);
+ assert.equal((await req('/api/submissions/assignments/'+group,c['teacher.b'],'DELETE',{})).status,200);
+ assert.equal((await state(admin)).lessons.some(e=>e.id===group),false);assert.equal((await state(admin)).submissions.length,0);assert.equal((await req('/api/submissions/files/'+deletedFile.id,admin)).status,404);assert.equal(fs.existsSync(path.join(dataDir,'files',deletedFile.id)),false);
+ assert.equal((await req('/api/submissions/assignments/'+one,admin,'DELETE',{})).status,200);
+ await app.close();await start();assert.equal((await state(admin)).lessons.length,0);
  console.log('PASS: assignment targets, role/class privacy, file bytes, input validation, resubmission, persistence and cascade deletion');
 }finally{if(app)await app.close();fs.rmSync(dataDir,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -25,6 +25,17 @@ export async function submissionRoute(request,u,db,bucket,readBody){
   return new Response(object.body,{headers:{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(f.name).replace(/'/g,'%27')}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
  }
  const editMatch=path.match(/^\/api\/submissions\/assignments\/([a-f0-9-]+)$/);
+
+ if(editMatch&&method==='DELETE'){
+  await readBody(request);
+  const old=await stmt('SELECT * FROM assignments WHERE id=?',editMatch[1]).first();if(!old)throw submissionError(404,'과제를 찾을 수 없습니다.');
+  if(u.role==='학생'||!lessonVisible(u,old)||u.role!=='관리자'&&old.author_id!==u.id)throw submissionError(403,'작성 교사 또는 관리자만 과제를 삭제할 수 있습니다.');
+  const files=await all('SELECT id FROM assignment_files WHERE assignment_id=? UNION SELECT f.id FROM submission_attachments f JOIN assignment_submissions s ON s.id=f.submission_id WHERE s.event_id=? UNION SELECT f.id FROM submission_files f JOIN submissions s ON s.id=f.submission_id WHERE s.event_id=?',old.id,old.id,old.id);
+  if(files.length&&!bucket)throw submissionError(503,'파일 저장소에 연결하지 못했습니다.');
+  await db.batch([stmt('DELETE FROM assignments WHERE id=?',old.id),stmt('DELETE FROM submissions WHERE event_id=?',old.id)]);
+  for(const f of files)try{await bucket.delete(f.id);}catch{}
+  return json(200,{ok:true});
+ }
  if(['/api/submissions','/api/submissions/assignments'].includes(path)&&method==='POST'||editMatch&&method==='PUT'){
   const creating=path.endsWith('/assignments')||!!editMatch;
   const old=editMatch?await stmt('SELECT * FROM assignments WHERE id=?',editMatch[1]).first():null;
