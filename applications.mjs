@@ -11,7 +11,7 @@ export function validateApplications(rows) {
   if(typeof raw.direct!=='boolean'&&raw.direct!==undefined)bad('면접 응시 방식을 확인해주세요.');r.direct=!!raw.direct;
   if(typeof raw.primary!=='boolean'&&raw.primary!==undefined)bad('주요 대학 선택을 확인해주세요.');r.primary=!!raw.primary;
   if(!r.univ){if(Object.values(r).some(Boolean))bad(`${i+1}행 대학명을 입력해주세요. 비우려면 행 비우기를 사용하세요.`);return r;}
-  if(!r.admission||!r.major||!['생기부 기반','교과','제시문'].includes(r.interviewType))bad(`${i+1}행의 전형, 학과, 면접유형을 입력해주세요.`);
+  if(!r.admission||!r.major||!['생기부 기반','교과','제시문','인성'].includes(r.interviewType))bad(`${i+1}행의 전형, 학과, 면접유형을 입력해주세요.`);
   for(const k of ['firstResult','finalResult'])if(!['','합격','불합격'].includes(r[k]))bad('합격 여부를 확인해주세요.');
   if(r.direct){r.firstDate='';r.firstResult='';}
   for(const k of ['firstDate','interviewDate','finalDate'])if(r[k]&&(!/^\d{4}-\d{2}-\d{2}$/.test(r[k])||!Number.isFinite(Date.parse(r[k]))||new Date(r[k]).toISOString().slice(0,10)!==r[k]||r[k]<'2000-01-01'||r[k]>'2100-12-31'))bad(`${i+1}행 날짜를 확인해주세요.`);
