@@ -57,6 +57,13 @@
       "when": 1789357720849,
       "tag": "0007_fluffy_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789426061225,
+      "tag": "0008_long_pyro",
+      "breakpoints": true
     }
   ]
 }

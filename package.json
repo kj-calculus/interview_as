@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server.cjs",
     "check": "node --check dist/app.js && node --check backend.cjs",
-    "test": "node test-system.cjs && node test-applications.cjs && node test-school.cjs && node test-preferences.cjs && node test-results.cjs && node test-management.cjs && node test-submissions.cjs && node verify.cjs",
+    "test": "node test-system.cjs && node test-applications.cjs && node test-school.cjs && node test-preferences.cjs && node test-results.cjs && node test-management.cjs && node test-submissions.cjs && node test-student-edit.cjs && node verify.cjs",
     "build": "node cloud/build.mjs"
   },
   "engines": {

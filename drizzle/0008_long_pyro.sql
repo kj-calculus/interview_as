@@ -1,0 +1,1 @@
+ALTER TABLE `availability` ADD `min_exam` integer DEFAULT 0 NOT NULL;

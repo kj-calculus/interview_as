@@ -25,5 +25,17 @@ export function decorateEvents(events,users){
 export function validateAvailability(b){
  const days=b.days,note=b.note??'';
  if(!Array.isArray(days)||days.length>5||days.some(d=>!Number.isInteger(d)||d<1||d>5)||typeof note!=='string'||note.length>2000)throw Object.assign(new Error('불가 요일과 비고(최대 2,000자)를 확인해주세요.'),{status:400});
- return {days:[...new Set(days)].sort(),note:note.trim()};
+ if(b.min_exam!==undefined&&typeof b.min_exam!=='boolean')throw Object.assign(new Error('최저 준비 여부를 확인해주세요.'),{status:400});
+ return {days:[...new Set(days)].sort(),note:note.trim(),min_exam:!!b.min_exam};
+}
+
+export async function saveStudentAvailability(db,u,b){
+ const student=b.student||u.id,s=await db.prepare('SELECT * FROM users WHERE id=?').bind(student).first();
+ if(!s||s.role!=='학생'||!(u.role==='관리자'||u.role==='학생'&&student===u.id||u.role==='교사'&&(u.class||'').split(',').map(c=>c.trim()).includes(s.class)))throw Object.assign(new Error('해당 학생의 정보를 수정할 수 없습니다.'),{status:403});
+ const a=validateAvailability(b),old=await db.prepare('SELECT * FROM availability WHERE student=?').bind(student).first();
+ if(b.min_exam===undefined)a.min_exam=!!old?.min_exam;
+ const current=old?{days:JSON.parse(old.days),note:old.note,min_exam:!!old.min_exam}:null;
+ if(b.expected!==undefined&&JSON.stringify(current)!==JSON.stringify(b.expected))throw Object.assign(new Error('다른 화면에서 조정 정보가 변경되었습니다. 다시 열어 확인해주세요.'),{status:409});
+ const result=old?await db.prepare('UPDATE availability SET days=?,note=?,min_exam=? WHERE student=? AND days=? AND note=? AND min_exam=?').bind(JSON.stringify(a.days),a.note,+a.min_exam,student,old.days,old.note,old.min_exam).run():await db.prepare('INSERT OR IGNORE INTO availability(student,days,note,min_exam) VALUES(?,?,?,?)').bind(student,JSON.stringify(a.days),a.note,+a.min_exam).run();
+ if(result.meta.changes!==1)throw Object.assign(new Error('조정 정보가 변경되었습니다. 다시 열어 확인해주세요.'),{status:409});return {student,...a};
 }
