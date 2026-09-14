@@ -45,12 +45,20 @@ function deleteAccount(id){
  $('#cancelAccountDelete').onclick=()=>$('#modal').close();$('#confirmAccountDelete').onclick=async()=>{const button=$('#confirmAccountDelete');button.disabled=true;try{await api('/api/accounts/delete',{method:'POST',body:{id}});$('#modal').close();await refreshState();toast('계정을 삭제했습니다.');}catch(e){toast(e.message);button.disabled=false;}};
 }
 async function api(url,{method='GET',body}={}){
- let response;try{response=await fetch(url,{method,credentials:'same-origin',cache:'no-store',headers:body?{'Content-Type':'application/json','X-Interview-Request':'1'}:{},...(body?{body:JSON.stringify(body)}:{})});}catch{throw Error('서버에 연결하지 못했습니다. 연결 상태를 확인한 후 다시 시도해주세요.');}
- const data=await response.json();if(!response.ok){if(response.status===401&&url!=='/api/login'){user=null;accounts=[];events=[];$('#modal').close();loginView();}throw Object.assign(Error(data.error||'요청을 처리하지 못했습니다.'),{status:response.status,details:data});}return data;
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),method==='GET'?20000:60000);let response,data;
+ try{
+  response=await fetch(url,{method,credentials:'same-origin',cache:'no-store',signal:controller.signal,headers:body?{'Content-Type':'application/json','X-Interview-Request':'1'}:{},...(body?{body:JSON.stringify(body)}:{})});
+  try{data=await response.json();}catch(error){if(controller.signal.aborted)throw error;throw Error('서버에서 올바른 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.');}
+ }catch(error){if(controller.signal.aborted)throw Error(method==='GET'?'연결이 지연되고 있습니다. 잠시 후 다시 시도해주세요.':'응답이 지연되고 있습니다. 새로고침하여 처리 결과를 확인한 뒤 다시 시도해주세요.');if(!response)throw Error('서버에 연결하지 못했습니다. 연결 상태를 확인한 후 다시 시도해주세요.');throw error;}finally{clearTimeout(timeout);}
+ if(!response.ok){if(response.status===401&&url!=='/api/login'){user=null;accounts=[];events=[];$('#modal').close();loginView();}throw Object.assign(Error(data.error||'요청을 처리하지 못했습니다.'),{status:response.status,details:data});}return data;
+}
+function connectionErrorView(message){
+ $('#app').innerHTML=`<div class="login-layout"><div class="login-card"><div class="brand"><span>m</span>면접온</div><h2>연결을 확인해주세요</h2><p class="error" role="alert">${esc(message)}</p><button class="primary" id="retryConnection">다시 연결</button></div></div>`;
+ $('#retryConnection').onclick=()=>boot();
 }
 async function boot(){
  $('#app').innerHTML='<div class="login-layout"><div class="login-card"><div class="brand"><span>m</span>면접온</div><p role="status">로그인 상태를 확인하고 있습니다…</p></div></div>';
- try{const result=await api('/api/me');user=result.user;if(user.mustChangePassword){passwordForm(true);return;}await refreshState();}catch(e){if(e.status===401)loginView();else loginView(e.message);}
+ try{const result=await api('/api/me');user=result.user;if(user.mustChangePassword){passwordForm(true);return;}await refreshState();}catch(e){if(e.status===401)loginView();else connectionErrorView(e.message);}
 }
 async function refreshState(){const data=await api('/api/state');user=data.user;role=user.role;identity=user.id;accounts=data.accounts;events=data.events;applications=data.applications||[];availability=data.availability||[];progress=data.progress||[];render();}
 function loginView(message=''){

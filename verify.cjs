@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
 const nodes=new Map();let registered,downloaded;
 const document={querySelector:s=>{if(!nodes.has(s))nodes.set(s,{innerHTML:'',style:{},close(){},showModal(){}});return nodes.get(s)},querySelectorAll:()=>[],createElement:()=>({click(){}}),modelContext:{registerTool:t=>{registered=t}}};
-const ctx=vm.createContext({document,console,setTimeout,crypto:require('crypto').webcrypto,ExcelJS:require('exceljs'),Blob,URL:{createObjectURL:b=>{downloaded=b;return 'blob:test'},revokeObjectURL(){}},fetch:async()=>({ok:false,status:401,json:async()=>({error:'로그인이 필요합니다.'})})});
+const ctx=vm.createContext({document,console,setTimeout,clearTimeout,AbortController,crypto:require('crypto').webcrypto,ExcelJS:require('exceljs'),Blob,URL:{createObjectURL:b=>{downloaded=b;return 'blob:test'},revokeObjectURL(){}},fetch:async()=>({ok:false,status:401,json:async()=>({error:'로그인이 필요합니다.'})})});
 vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);const run=s=>vm.runInContext(s,ctx);
 (async()=>{
  await new Promise(r=>setImmediate(r));assert.ok(nodes.get('#app').innerHTML.includes('loginForm'));
@@ -39,6 +39,10 @@ vm.runInContext(fs.readFileSync('dist/app.js','utf8'),ctx);const run=s=>vm.runIn
  run("events.push({...events[0],id:'mock1',lesson_kind:'3차-모의면접',title:'3차-모의면접',date:'2026-11-20'},{...events[0],id:'mock2',lesson_kind:'3차-모의면접',title:'3차-모의면접',date:'2026-11-22'});");assert.ok(run('afterschoolView()').includes('등록 2회'));assert.ok(run('afterschoolView()').includes('2026-11-20'));assert.ok(run('afterschoolView()').includes('2026-11-22'));assert.equal(run('afterschoolView()').includes('checkbox'),false);
  run("showUniversity=true;applications=[{student:'student.a',rows:[{univ:'A',major:'학과'},{univ:'B',major:'학과',primary:true}]}];events=[{id:'a',student:'student.a',type:'interview',application:'student.a:0',slot:0,univ:'A',major:'학과',date:'2026-11-20'},{id:'b',student:'student.a',type:'interview',application:'student.a:1',slot:1,univ:'B',major:'학과',date:'2026-11-22'}];selected='student.a';");assert.equal(run('filteredCalendarEvents(events).map(e=>e.id).join()'),'b');assert.ok(run('timelineView(visibleStudents())').includes('A'));assert.ok(run('timelineView(visibleStudents())').includes('B'));
  run("role='학생';");assert.equal(run('filteredCalendarEvents(events).length'),2);run("role='관리자';");assert.equal(run('filteredCalendarEvents(events).length'),2);run("role='교사';applications[0].rows[1].primary=false;");assert.equal(run('filteredCalendarEvents(events)[0].id'),'a');
+ const originalFetch=ctx.fetch;ctx.setTimeout=(fn,ms)=>setTimeout(fn,ms===20000?5:ms);ctx.fetch=async(u,o)=>new Promise((resolve,reject)=>o.signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}));
+ await assert.rejects(()=>run("api('/api/me')"),/연결이 지연/);await run('boot()');assert.ok(nodes.get('#app').innerHTML.includes('retryConnection'));
+ ctx.fetch=async()=>({ok:false,status:502,json:async()=>{throw new SyntaxError('html');}});await assert.rejects(()=>run("api('/api/me')"),/올바른 응답/);
+ ctx.fetch=originalFetch;ctx.setTimeout=setTimeout;await nodes.get('#retryConnection').onclick();assert.ok(nodes.get('#app').innerHTML.includes('loginForm'));
  assert.equal(registered.name,'get_visible_interview_schedule');await assert.rejects(()=>registered.execute({unexpected:true}));await assert.rejects(()=>registered.execute({}),/로그인/);
  console.log('PASS: login rendering, role UI, timeline, XLSX dropdowns, and WebMCP rejection paths (VM; no browser visual QA)');
 })().catch(e=>{console.error(e);process.exitCode=1});
