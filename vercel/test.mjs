@@ -29,3 +29,5 @@ const submissionFile=await handle(req('submissions/files/abcdef',{method:'GET',b
 
 assert.equal((await handle(req('submissions/assignments'),async()=>Response.json({id:'new'}))).status,200);
 assert.equal((await handle(req('submissions/assignment-files/abcdef',{method:'GET',body:undefined}),async()=>new Response(new Uint8Array([1,2])))).status,200);
+
+assert.equal((await handle(req('submissions/assignments/abcdef',{method:'PUT'}),async()=>Response.json({ok:true}))).status,200);

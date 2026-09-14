@@ -34,6 +34,16 @@ const migrationDb=new (require('node:sqlite').DatabaseSync)(':memory:');migratio
  for(const cookie of [admin,c['teacher.a'],c['teacher.b'],c['student.a']]){assert.equal((await state(cookie)).submissions.length,1);const download=await req('/api/submissions/files/'+file.id,cookie);assert.equal(download.status,200);assert.equal(download.data.toString(),'학생 제출 파일');}
  for(const cookie of [c['student.b'],c['student.c'],c['teacher.c']]){assert.equal((await state(cookie)).submissions.length,0);assert.equal((await req('/api/submissions/files/'+file.id,cookie)).status,404);}
  assert.equal((await req('/api/submissions',c['student.a'],'POST',{...payload,content:'수정 제출',files:[]})).status,201);
+
+ const editPayload={...assignment,title:'수정 과제',content:'새 안내',files:[],keep_files:[teacherFile.id]};
+ for(const cookie of [c['student.a'],c['teacher.b'],c['teacher.c']])assert.equal((await req('/api/submissions/assignments/'+one,cookie,'PUT',editPayload)).status,403);
+ assert.equal((await req('/api/submissions/assignments/'+one,c['teacher.a'],'PUT',editPayload)).status,200);
+ assert.equal((await state(c['student.a'])).lessons.find(e=>e.id===one).title,'수정 과제');
+ assert.equal((await req('/api/submissions/assignment-files/'+teacherFile.id,c['student.a'])).status,200);
+ assert.equal((await req('/api/submissions/assignments/'+one,admin,'PUT',{...editPayload,target_ids:['student.b'],keep_files:[],files:assignment.files})).status,200);
+ assert.equal((await state(c['student.a'])).submissions.length,0);assert.equal((await req('/api/submissions/files/'+file.id,c['student.a'])).status,404);
+ assert.equal((await req('/api/submissions/assignment-files/'+teacherFile.id,admin)).status,404);
+ assert.equal((await req('/api/submissions/assignments/'+one,c['teacher.a'],'PUT',{...editPayload,keep_files:[],files:[]})).status,200);
  const latest=(await state(c['teacher.a'])).submissions;assert.equal(latest.length,1);assert.equal(latest[0].content,'수정 제출');assert.equal(latest[0].files.length,0);
  await app.close();await start();assert.equal((await state(c['teacher.b'])).submissions[0].content,'수정 제출');
  await req('/api/events/'+oldLesson,c['teacher.a'],'DELETE',{});assert.equal((await state(c['student.a'])).submissions.length,1);
