@@ -23,3 +23,6 @@ assert.equal((await handle(req('availability',{method:'PUT'}),async url=>{assert
 assert.equal((await handle(req('results'),async url=>{assert.ok(url.endsWith('/api/results'));return Response.json({ok:true});})).status,200);
 
 for(const path of ['important-events','lesson-progress'])assert.equal((await handle(req(path,{method:path==='lesson-progress'?'PUT':'POST'}),async()=>Response.json({ok:true}))).status,200);
+
+assert.equal((await handle(req('submissions'),async()=>Response.json({id:'new'}))).status,200);
+const submissionFile=await handle(req('submissions/files/abcdef',{method:'GET',body:undefined}),async()=>new Response(new Uint8Array([1,2,3])));assert.equal(submissionFile.status,200);assert.deepEqual(new Uint8Array(await submissionFile.arrayBuffer()),new Uint8Array([1,2,3]));

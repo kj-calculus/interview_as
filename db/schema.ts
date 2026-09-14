@@ -18,3 +18,6 @@ export const availability=sqliteTable('availability',{student:text('student').pr
 
 export const importantEvents=sqliteTable('important_events',{id:text('id').primaryKey(),title:text('title').notNull(),date:text('date').notNull(),description:text('description').notNull(),author_id:text('author_id').notNull().references(()=>users.id,{onDelete:'cascade'})});
 export const lessonProgress=sqliteTable('lesson_progress',{id:text('id').primaryKey(),event_id:text('event_id').notNull().references(()=>events.id,{onDelete:'cascade'}),student:text('student').notNull().references(()=>users.id,{onDelete:'cascade'}),completed_at:text('completed_at').notNull(),marked_by:text('marked_by').notNull()});
+
+export const submissions=sqliteTable('submissions',{id:text('id').primaryKey(),event_id:text('event_id').notNull().references(()=>events.id,{onDelete:'cascade'}),student:text('student').notNull().references(()=>users.id,{onDelete:'cascade'}),content:text('content').notNull(),created_at:text('created_at').notNull()});
+export const submissionFiles=sqliteTable('submission_files',{id:text('id').primaryKey(),submission_id:text('submission_id').notNull().references(()=>submissions.id,{onDelete:'cascade'}),name:text('name').notNull(),size:integer('size').notNull()});

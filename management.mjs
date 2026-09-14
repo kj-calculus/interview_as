@@ -23,7 +23,7 @@ export async function managementRoute(request,u,db,readBody){
  const match=path.match(/^\/api\/important-events\/([a-f0-9-]+)$/);
  if(path==='/api/important-events'&&method==='POST'||match&&['PUT','DELETE'].includes(method)){
   const b=await readBody(request),old=match?await stmt('SELECT * FROM important_events WHERE id=?',match[1]).first():null;
-  if(match&&!old)throw managementError(404,'중요 일정을 찾을 수 없습니다.');
+  if(match&&!old)throw managementError(404,'학사일정을 찾을 수 없습니다.');
   if(old&&u.role!=='관리자'&&old.author_id!==u.id)throw managementError(403,'등록한 교사 또는 관리자만 수정·삭제할 수 있습니다.');
   if(method==='DELETE'){await stmt('DELETE FROM important_events WHERE id=?',old.id).run();return json(200,{ok:true});}
   const title=managementText(b.title,100),date=managementText(b.date,10),description=managementText(b.description??'',2000,false);
