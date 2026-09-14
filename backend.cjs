@@ -20,11 +20,13 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
  for(const [name,value] of [['lesson_kind',"''"],['teacher_name',"''"],['target_ids',"'null'"]])if(!db.prepare('PRAGMA table_info(events)').all().some(c=>c.name===name))db.exec('ALTER TABLE events ADD COLUMN '+name+' TEXT NOT NULL DEFAULT '+value);
  db.exec('CREATE TABLE IF NOT EXISTS resource_posts(id TEXT PRIMARY KEY,author_id TEXT NOT NULL,author_name TEXT NOT NULL,title TEXT NOT NULL,content TEXT NOT NULL,created_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS resource_files(id TEXT PRIMARY KEY,post_id TEXT NOT NULL REFERENCES resource_posts(id) ON DELETE CASCADE,name TEXT NOT NULL,size INTEGER NOT NULL)');
  db.exec('CREATE TABLE IF NOT EXISTS submissions(id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,student TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,content TEXT NOT NULL,created_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS submission_files(id TEXT PRIMARY KEY,submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,name TEXT NOT NULL,size INTEGER NOT NULL)');
+
  const storage=require('./local-storage.cjs').adapters(db,dataDir);
  db.exec('CREATE TABLE IF NOT EXISTS availability(student TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,days TEXT NOT NULL,note TEXT NOT NULL)');
  if(!db.prepare('PRAGMA table_info(resource_posts)').all().some(c=>c.name==='target_ids'))db.exec("ALTER TABLE resource_posts ADD COLUMN target_ids TEXT NOT NULL DEFAULT 'null'");
  for(const name of ['teacher_id','result'])if(!db.prepare('PRAGMA table_info(events)').all().some(c=>c.name===name))db.exec("ALTER TABLE events ADD COLUMN "+name+" TEXT NOT NULL DEFAULT ''");
  db.exec('CREATE TABLE IF NOT EXISTS important_events(id TEXT PRIMARY KEY,title TEXT NOT NULL,date TEXT NOT NULL,description TEXT NOT NULL,author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS lesson_progress(id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,student TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,completed_at TEXT NOT NULL,marked_by TEXT NOT NULL)');
+ if(!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='assignments'").get())db.exec(fs.readFileSync(path.join(__dirname,'drizzle/0007_fluffy_tusk.sql'),'utf8'));
  let submissionRoute,managementState,managementRoute,deleteAccountData,decorateEvents,saveAdmissionResult,saveApplicationRows,validateApplications,applicationEvents,lessonVisible,lessonFields,validateAvailability,resourceRoute;
  const allUsers=()=>db.prepare('SELECT * FROM users ORDER BY role,class,number,name').all();
  const getUser=id=>db.prepare('SELECT * FROM users WHERE id=?').get(id);

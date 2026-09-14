@@ -42,6 +42,7 @@ export async function deleteAccountData(db,u,id){
   batch.push(stmt('DELETE FROM events WHERE teacher_id=?',target.id));
  }
  if(target.role==='학생'){
+  batch.push(stmt("UPDATE assignments SET target_ids=(SELECT json_group_array(value) FROM json_each(assignments.target_ids) WHERE value<>?) WHERE target_ids<>'null' AND EXISTS(SELECT 1 FROM json_each(assignments.target_ids) WHERE value=?)",target.id,target.id));
   batch.push(stmt("DELETE FROM events WHERE type='lesson' AND target_ids<>'null' AND json_array_length(target_ids)=1 AND EXISTS(SELECT 1 FROM json_each(events.target_ids) WHERE value=?)",target.id));
   batch.push(stmt("UPDATE events SET target_ids=(SELECT json_group_array(value) FROM json_each(events.target_ids) WHERE value<>?) WHERE type='lesson' AND target_ids<>'null' AND EXISTS(SELECT 1 FROM json_each(events.target_ids) WHERE value=?)",target.id,target.id));
   batch.push(stmt("UPDATE resource_posts SET target_ids=(SELECT json_group_array(value) FROM json_each(resource_posts.target_ids) WHERE value<>?) WHERE target_ids<>'null' AND EXISTS(SELECT 1 FROM json_each(resource_posts.target_ids) WHERE value=?)",target.id,target.id));

@@ -26,3 +26,6 @@ for(const path of ['important-events','lesson-progress'])assert.equal((await han
 
 assert.equal((await handle(req('submissions'),async()=>Response.json({id:'new'}))).status,200);
 const submissionFile=await handle(req('submissions/files/abcdef',{method:'GET',body:undefined}),async()=>new Response(new Uint8Array([1,2,3])));assert.equal(submissionFile.status,200);assert.deepEqual(new Uint8Array(await submissionFile.arrayBuffer()),new Uint8Array([1,2,3]));
+
+assert.equal((await handle(req('submissions/assignments'),async()=>Response.json({id:'new'}))).status,200);
+assert.equal((await handle(req('submissions/assignment-files/abcdef',{method:'GET',body:undefined}),async()=>new Response(new Uint8Array([1,2])))).status,200);
