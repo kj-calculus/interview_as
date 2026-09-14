@@ -8,8 +8,8 @@ async function req(route,cookie='',method='GET',body){const r=await fetch(base+r
  const users=[['student.a','학생','1','1반'],['student.b','학생','2','1반'],['student.c','학생','3','2반'],['teacher.a','교사','','1반'],['teacher.b','교사','','1반'],['teacher.c','교사','','2반']].map(([id,role,number,cls])=>({id,role,number,class:cls,name:id}));
  assert.equal((await req('/api/accounts',admin,'POST',{rows:users})).status,201);const c={};for(const u of users){c[u.id]=(await req('/api/login','','POST',{id:u.id,password:'777777'})).cookie;await req('/api/password',c[u.id],'POST',{currentPassword:'777777',newPassword:'Password123!'});}
 
- const row={univ:'테스트대',admission:'종합',major:'수학',interviewType:'생기부 기반',firstDate:'2026-10-01',interviewDate:'2026-11-01',finalDate:'2026-12-01',firstResult:'',finalResult:'',direct:false};
- let rows=[row,{...row,admission:'추천'},...Array.from({length:4},()=>({}))];assert.equal((await req('/api/applications',c['student.a'],'PUT',{rows,expectedRows:null})).status,200);
+ const row={primary:true,univ:'테스트대',admission:'종합',major:'수학',interviewType:'생기부 기반',firstDate:'2026-10-01',interviewDate:'2026-11-01',finalDate:'2026-12-01',firstResult:'',finalResult:'',direct:false};
+ let rows=[row,{...row,primary:false,admission:'추천'},...Array.from({length:4},()=>({}))];assert.equal((await req('/api/applications',c['student.a'],'PUT',{rows,expectedRows:null})).status,200);
  const state=async cookie=>(await req('/api/state',cookie)).data;
  rows=(await state(c['student.a'])).applications[0].rows;const original=structuredClone(rows);
  const payload={student:'student.a',slot:0,phase:'first',result:'합격',expectedRow:rows[0]};
