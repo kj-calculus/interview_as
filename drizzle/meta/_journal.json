@@ -64,6 +64,13 @@
       "when": 1789426061225,
       "tag": "0008_long_pyro",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789427501517,
+      "tag": "0009_sweet_quentin_quire",
+      "breakpoints": true
     }
   ]
 }

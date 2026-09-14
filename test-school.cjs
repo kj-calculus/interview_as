@@ -28,7 +28,7 @@ async function req(route,cookie='',method='GET',body){const r=await fetch(base+r
  assert.equal((await req('/api/resources/'+pid,c['teacher.a'],'PUT',{title:'수정',content:'수정 내용'})).status,200);
  assert.equal((await req('/api/resources',admin,'POST',{...post,files:[{name:'x',data:'invalid!'}]})).status,400);
  assert.equal((await req('/api/resources',admin,'POST',{...post,files:Array(4).fill(post.files[0])})).status,400);
- assert.equal((await req('/api/resources',admin,'POST',{...post,files:[{name:'large',data:Buffer.alloc(2*1024*1024+1).toString('base64')}]})).status,413);
+ assert.equal((await req('/api/resources',admin,'POST',{...post,files:[{name:'large',data:Buffer.alloc(10*1024*1024+1).toString('base64')}]})).status,413);
  await app.close();await start();assert.deepEqual((await req('/api/resources/files/'+fid,c['student.a'])).data,bytes);assert.equal((await req('/api/state',c['student.a'])).data.events.length,2);
  assert.equal((await req('/api/resources/'+pid,admin,'DELETE',{})).status,200);assert.equal((await req('/api/resources/files/'+fid,c['student.a'])).status,404);assert.equal((await req('/api/resources',admin)).data.posts.length,0);
  console.log('PASS: targeted lessons, all students, teacher attribution, class security, posts, file bytes, permissions, size limits and restart persistence');

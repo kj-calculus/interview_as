@@ -1,3 +1,4 @@
+import {fileDownload,decodeAttachment} from './transfers.mjs';
 const resourceError=(status,message)=>Object.assign(new Error(message),{status});
 const resourceText=(v,max,required=true)=>{if(typeof v!=='string'||v.trim().length>max||(required&&!v.trim()))throw resourceError(400,'제목과 내용을 확인해주세요.');return v.trim();};
 export async function resourceRoute(request,u,db,bucket,readBody){
@@ -18,13 +19,12 @@ export async function resourceRoute(request,u,db,bucket,readBody){
  const fileMatch=route.match(/^\/api\/resources\/files\/([a-f0-9-]+)$/);
  if(fileMatch&&method==='GET'){
   const f=await first('SELECT * FROM resource_files WHERE id=?',fileMatch[1]);if(!f||!visible(await first('SELECT * FROM resource_posts WHERE id=?',f.post_id)))throw resourceError(404,'첨부파일을 찾을 수 없습니다.');
-  const object=await bucket?.get(f.id);if(!object)throw resourceError(503,'파일을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
-  return new Response(object.body,{headers:{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(f.name).replace(/'/g,'%27')}`,'Content-Length':String(f.size),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
+  return await fileDownload(request,bucket,f);
  }
  if(route==='/api/resources'&&method==='POST'){
   const b=await readBody(request),title=resourceText(b.title,120),content=resourceText(b.content??'',20000,false),files=b.files??[],target_ids=targets(b);
   if(!Array.isArray(files)||files.length>3)throw resourceError(400,'첨부파일은 최대 3개입니다.');
-  let total=0;const attachments=files.map(f=>{const name=resourceText(f?.name,180).replace(/[\r\n\\/]/g,'_');if(typeof f.data!=='string'||f.data.length>2800000||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(f.data))throw resourceError(400,'첨부파일을 확인해주세요.');const bytes=Uint8Array.from(atob(f.data),c=>c.charCodeAt(0));total+=bytes.length;if(!bytes.length||total>2*1024*1024)throw resourceError(413,'첨부파일은 합계 2MB 이하로 올려주세요.');return {id:crypto.randomUUID(),name,bytes};});
+  let total=0;const attachments=files.map(f=>{const name=resourceText(f?.name,180).replace(/[\r\n\\/]/g,'_');if(typeof f.data!=='string'||f.data.length>14000000||(f.data.length%4!==0||!/^[A-Za-z0-9+/]*={0,2}$/.test(f.data)))throw resourceError(400,'첨부파일을 확인해주세요.');const bytes=decodeAttachment(f.data);total+=bytes.length;if(!bytes.length||total>10*1024*1024)throw resourceError(413,'첨부파일은 합계 10MB 이하로 올려주세요.');return {id:crypto.randomUUID(),name,bytes};});
   if(!content&&!attachments.length)throw resourceError(400,'내용 또는 첨부파일을 입력해주세요.');
   if(attachments.length&&!bucket)throw resourceError(503,'파일 저장소를 준비 중입니다. 잠시 후 다시 시도해주세요.');
   const id=crypto.randomUUID(),uploaded=[];

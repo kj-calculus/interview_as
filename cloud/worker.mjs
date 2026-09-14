@@ -1,3 +1,4 @@
+import {uploadRoute,resolveUpload} from '../transfers.mjs';
 import {submissionRoute} from '../submissions.mjs';
 import {managementState,managementRoute,deleteAccountData} from '../management.mjs';
 import {saveAdmissionResult,saveApplicationRows} from '../results.mjs';
@@ -58,8 +59,9 @@ export async function handle(request,env,assets={}) {
   if(route==='/api/password'&&method==='POST') {const b=await readBody(request),old=text(b.currentPassword,128),next=text(b.newPassword,128);if(next.length<8)throw fail(400,'새 비밀번호는 8자 이상 입력해주세요.');if(old===next)throw fail(400,'현재 비밀번호와 다른 비밀번호를 입력해주세요.');if(!await matches(old,u.password_hash))throw fail(400,'현재 비밀번호가 올바르지 않습니다.');const hash=await passwordHash(next);const result=await run('UPDATE users SET password_hash=?,must_change=0 WHERE id=? AND password_hash=?',hash,u.id,u.password_hash);if(result.meta.changes!==1)throw fail(409,'비밀번호가 변경되었습니다. 다시 로그인해주세요.');await run('DELETE FROM sessions WHERE user_id=? AND token_hash<>?',u.id,u.token_hash);return json(200,{ok:true});}
   if(u.must_change)throw fail(403,'처음 로그인하면 비밀번호를 변경해주세요.',{code:'PASSWORD_CHANGE_REQUIRED'});
   if(route.startsWith('/api/important-events')||route==='/api/lesson-progress')return await managementRoute(request,u,db,readBody);
-  if(route.startsWith('/api/submissions'))return await submissionRoute(request,u,db,env.FILES,readBody);
-  if(route.startsWith('/api/resources'))return await resourceRoute(request,u,db,env.FILES,readBody);
+  if(route.startsWith('/api/uploads'))return await uploadRoute(request,u,db,env.FILES,readBody);
+  if(route.startsWith('/api/submissions'))return await submissionRoute(request,u,db,env.FILES,async()=>resolveUpload(await readBody(request),u,db,env.FILES,route,method));
+  if(route.startsWith('/api/resources'))return await resourceRoute(request,u,db,env.FILES,async()=>resolveUpload(await readBody(request),u,db,env.FILES,route,method));
   if(route==='/api/state'&&method==='GET') {const list=await users(),accounts=list.filter(a=>u.role==='관리자'||a.id===u.id||canStudent(u,a));const events=(await all('SELECT * FROM events ORDER BY date,time')).filter(e=>e.type==='lesson'?lessonVisible(u,e):canStudent(u,list.find(a=>a.id===e.student)));const applications=(await all('SELECT * FROM applications')).filter(a=>canStudent(u,list.find(s=>s.id===a.student))).map(a=>({...a,rows:JSON.parse(a.rows)}));const availability=(await all('SELECT * FROM availability')).filter(a=>canStudent(u,list.find(s=>s.id===a.student))).map(a=>({...a,days:JSON.parse(a.days),min_exam:!!a.min_exam}));const extra=await managementState(db,u);return json(200,{user:publicUser(u),accounts:accounts.map(publicUser),applications,availability,progress:extra.progress,events:[...decorateEvents(events,list),...applicationEvents(applications,accounts),...extra.important]});}
   if(route==='/api/availability'&&method==='PUT')return json(200,await saveStudentAvailability(db,u,await readBody(request)));
   if(route==='/api/results'&&method==='POST'){await saveAdmissionResult(db,u,await readBody(request));return json(200,{ok:true});}
