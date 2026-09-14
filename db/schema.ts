@@ -15,3 +15,6 @@ export const resourcePosts=sqliteTable('resource_posts',{id:text('id').primaryKe
 export const resourceFiles=sqliteTable('resource_files',{id:text('id').primaryKey(),post_id:text('post_id').notNull().references(()=>resourcePosts.id,{onDelete:'cascade'}),name:text('name').notNull(),size:integer('size').notNull()});
 
 export const availability=sqliteTable('availability',{student:text('student').primaryKey().references(()=>users.id,{onDelete:'cascade'}),days:text('days').notNull(),note:text('note').notNull()});
+
+export const importantEvents=sqliteTable('important_events',{id:text('id').primaryKey(),title:text('title').notNull(),date:text('date').notNull(),description:text('description').notNull(),author_id:text('author_id').notNull().references(()=>users.id,{onDelete:'cascade'})});
+export const lessonProgress=sqliteTable('lesson_progress',{id:text('id').primaryKey(),event_id:text('event_id').notNull().references(()=>events.id,{onDelete:'cascade'}),student:text('student').notNull().references(()=>users.id,{onDelete:'cascade'}),completed_at:text('completed_at').notNull(),marked_by:text('marked_by').notNull()});

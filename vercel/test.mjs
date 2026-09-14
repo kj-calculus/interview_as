@@ -21,3 +21,5 @@ const binary=await handle(req('resources/files/abcdef',{method:'GET',body:undefi
 assert.equal((await handle(req('availability',{method:'PUT'}),async url=>{assert.ok(url.endsWith('/api/availability'));return Response.json({ok:true});})).status,200);
 
 assert.equal((await handle(req('results'),async url=>{assert.ok(url.endsWith('/api/results'));return Response.json({ok:true});})).status,200);
+
+for(const path of ['important-events','lesson-progress'])assert.equal((await handle(req(path,{method:path==='lesson-progress'?'PUT':'POST'}),async()=>Response.json({ok:true}))).status,200);

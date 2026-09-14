@@ -23,7 +23,8 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
  db.exec('CREATE TABLE IF NOT EXISTS availability(student TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,days TEXT NOT NULL,note TEXT NOT NULL)');
  if(!db.prepare('PRAGMA table_info(resource_posts)').all().some(c=>c.name==='target_ids'))db.exec("ALTER TABLE resource_posts ADD COLUMN target_ids TEXT NOT NULL DEFAULT 'null'");
  for(const name of ['teacher_id','result'])if(!db.prepare('PRAGMA table_info(events)').all().some(c=>c.name===name))db.exec("ALTER TABLE events ADD COLUMN "+name+" TEXT NOT NULL DEFAULT ''");
- let decorateEvents,saveAdmissionResult,saveApplicationRows,validateApplications,applicationEvents,lessonVisible,lessonFields,validateAvailability,resourceRoute;
+ db.exec('CREATE TABLE IF NOT EXISTS important_events(id TEXT PRIMARY KEY,title TEXT NOT NULL,date TEXT NOT NULL,description TEXT NOT NULL,author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE); CREATE TABLE IF NOT EXISTS lesson_progress(id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,student TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,completed_at TEXT NOT NULL,marked_by TEXT NOT NULL)');
+ let managementState,managementRoute,deleteAccountData,decorateEvents,saveAdmissionResult,saveApplicationRows,validateApplications,applicationEvents,lessonVisible,lessonFields,validateAvailability,resourceRoute;
  const allUsers=()=>db.prepare('SELECT * FROM users ORDER BY role,class,number,name').all();
  const getUser=id=>db.prepare('SELECT * FROM users WHERE id=?').get(id);
  const canStudent=(u,s)=>s?.role==='학생'&&(u.role==='관리자'||(u.role==='교사'&&classesOf(u).includes(s.class))||(u.role==='학생'&&u.id===s.id));
@@ -58,14 +59,14 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
    if(u.role==='교사'&&!classesOf(u).includes(e.class))throw fail(403,'본인 배정반에만 수업을 등록할 수 있습니다.');
    if(!allUsers().some(a=>classesOf(a).includes(e.class)))throw fail(400,'계정을 먼저 등록해 배정반을 만들어주세요.');
   }else{const student=getUser(text(b.student,40));if(!canStudent(u,student))throw fail(403,'해당 학생의 일정을 관리할 수 없습니다.');e.student=student.id;e.class=student.class;e.univ=text(b.univ,100);e.major=text(b.major??'',100,false);}
-  if(type==='lesson')Object.assign(e,lessonFields(u,b,allUsers(),old));return e;
+  if(type==='lesson')Object.assign(e,lessonFields(u,b,allUsers(),old));else e.teacher_id=old?old.teacher_id||'':u.id;return e;
  }
  const tokenHash=t=>crypto.createHash('sha256').update(t).digest('hex');
  function session(req){const token=(req.headers.cookie||'').split(';').map(c=>c.trim()).find(c=>c.startsWith('interview_session='))?.slice('interview_session='.length);if(!token||!/^[a-f0-9]{64}$/.test(token))return null;return db.prepare('SELECT users.*,sessions.token_hash FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=? AND expires>?').get(tokenHash(token),Date.now());}
  const cookie=(token,age)=>`interview_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secureCookies?'; Secure':''}`;
  async function body(req){if(req.headers['content-type']?.split(';')[0]!=='application/json'||req.headers['x-interview-request']!=='1')throw fail(415,'올바른 요청 형식이 아닙니다.');let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>(req.url.startsWith('/api/resources')?3*1024*1024:1024*1024))throw fail(413,'요청이 너무 큽니다.');chunks.push(chunk);}try{const b=JSON.parse(Buffer.concat(chunks).toString());if(!b||Array.isArray(b)||typeof b!=='object')throw Error();return b;}catch{throw fail(400,'입력 내용을 확인해주세요.');}}
  const attempts=new Map();
- const ready=(async()=>{({validateApplications,applicationEvents}=await import('./applications.mjs'));({lessonVisible,lessonFields,validateAvailability,decorateEvents}=await import('./school.mjs'));({resourceRoute}=await import('./resources.mjs'));({saveAdmissionResult,saveApplicationRows}=await import('./results.mjs'));if(!getUser('admin'))db.prepare('INSERT INTO users(id,number,name,role,class,password_hash) VALUES(?,?,?,?,?,?)').run('admin','','관리자','관리자','',await hashPassword(process.env.ADMIN_INITIAL_PASSWORD||'admin123'));})();
+ const ready=(async()=>{({validateApplications,applicationEvents}=await import('./applications.mjs'));({lessonVisible,lessonFields,validateAvailability,decorateEvents}=await import('./school.mjs'));({resourceRoute}=await import('./resources.mjs'));({saveAdmissionResult,saveApplicationRows}=await import('./results.mjs'));({managementState,managementRoute,deleteAccountData}=await import('./management.mjs'));if(!getUser('admin'))db.prepare('INSERT INTO users(id,number,name,role,class,password_hash) VALUES(?,?,?,?,?,?)').run('admin','','관리자','관리자','',await hashPassword(process.env.ADMIN_INITIAL_PASSWORD||'admin123'));})();
  const dummy=hashPassword(crypto.randomBytes(24).toString('hex'));
  const server=http.createServer(async(req,res)=>{
   const json=(status,value)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));};
@@ -90,8 +91,9 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
      const b=await body(req),old=text(b.currentPassword,128),next=text(b.newPassword,128);if(next.length<8)throw fail(400,'새 비밀번호는 8자 이상 입력해주세요.');if(old===next)throw fail(400,'현재 비밀번호와 다른 비밀번호를 입력해주세요.');if(!await matches(old,u.password_hash))throw fail(400,'현재 비밀번호가 올바르지 않습니다.');const hash=await hashPassword(next);if(getUser(u.id).password_hash!==u.password_hash)throw fail(409,'비밀번호가 변경되었습니다. 다시 로그인해주세요.');db.prepare('UPDATE users SET password_hash=?,must_change=0 WHERE id=?').run(hash,u.id);db.prepare('DELETE FROM sessions WHERE user_id=? AND token_hash<>?').run(u.id,u.token_hash);return json(200,{ok:true});
     }
     if(u.must_change)throw fail(403,'처음 로그인하면 비밀번호를 변경해주세요.',{code:'PASSWORD_CHANGE_REQUIRED'});
+    if(route.startsWith('/api/important-events')||route==='/api/lesson-progress'){const result=await managementRoute({url:'http://localhost'+req.url,method:req.method},u,storage.DB,()=>body(req));res.writeHead(result.status,Object.fromEntries(result.headers));return res.end(Buffer.from(await result.arrayBuffer()));}
     if(route.startsWith('/api/resources')){const request={url:'http://localhost'+req.url,method:req.method};const result=await resourceRoute(request,u,storage.DB,storage.FILES,()=>body(req));res.writeHead(result.status,Object.fromEntries(result.headers));return res.end(Buffer.from(await result.arrayBuffer()));}
-    if(route==='/api/state'&&req.method==='GET')return json(200,state(u));
+    if(route==='/api/state'&&req.method==='GET'){const s=state(u),extra=await managementState(storage.DB,u);return json(200,{...s,progress:extra.progress,events:[...s.events,...extra.important]});}
     if(route==='/api/availability'&&req.method==='PUT'){if(u.role!=='학생')throw fail(403,'학생 본인만 입력할 수 있습니다.');const b=await body(req);if(b.student&&b.student!==u.id)throw fail(403,'본인 정보만 입력할 수 있습니다.');const a=validateAvailability(b);db.prepare('INSERT INTO availability(student,days,note) VALUES(?,?,?) ON CONFLICT(student) DO UPDATE SET days=excluded.days,note=excluded.note').run(u.id,JSON.stringify(a.days),a.note);return json(200,{student:u.id,...a});}
     if(route==='/api/results'&&req.method==='POST'){await saveAdmissionResult(storage.DB,u,await body(req));return json(200,{ok:true});}
     if(route==='/api/applications'&&req.method==='PUT'){if(u.role!=='학생')throw fail(403,'학생 본인만 지원 정보를 입력할 수 있습니다.');const b=await body(req);if(b.student&&b.student!==u.id)throw fail(403,'본인 지원 정보만 입력할 수 있습니다.');const rows=validateApplications(b.rows);await saveApplicationRows(storage.DB,u.id,rows,b.expectedRows);return json(200,{ok:true});}
@@ -109,9 +111,7 @@ function createApp({dataDir=process.env.DATA_DIR||path.join(__dirname,'data'),se
     if(route==='/api/accounts/classes'&&req.method==='POST'){
      if(u.role!=='관리자')throw fail(403,'관리자만 교사의 배정반을 변경할 수 있습니다.');const b=await body(req),target=getUser(text(b.id,40));if(!target||target.role!=='교사')throw fail(404,'교사 계정을 찾을 수 없습니다.');const classes=normalizeClass(text(b.class,1700),'교사');db.prepare('UPDATE users SET class=? WHERE id=?').run(classes,target.id);return json(200,{ok:true});
     }
-    if(route==='/api/accounts/delete'&&req.method==='POST'){
-     if(u.role!=='관리자')throw fail(403,'관리자만 계정을 삭제할 수 있습니다.');const b=await body(req),target=getUser(text(b.id,40));if(!target)throw fail(404,'계정을 찾을 수 없습니다.');if(target.role==='관리자')throw fail(403,'관리자 계정은 삭제할 수 없습니다.');db.exec('BEGIN IMMEDIATE');try{db.prepare('DELETE FROM sessions WHERE user_id=?').run(target.id);db.prepare('DELETE FROM events WHERE student=?').run(target.id);db.prepare('DELETE FROM users WHERE id=?').run(target.id);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}return json(200,{ok:true});
-    }
+    if(route==='/api/accounts/delete'&&req.method==='POST'){const b=await body(req);await deleteAccountData(storage.DB,u,b.id);return json(200,{ok:true});}
     if(route==='/api/events'&&req.method==='POST'){const e=validateEvent(u,await body(req)),id=crypto.randomUUID();db.prepare('INSERT INTO events(id,type,student,class,univ,major,date,time,title,task,lesson_kind,teacher_name,target_ids,teacher_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,e.type,e.student,e.class,e.univ,e.major,e.date,e.time,e.title,e.task,e.lesson_kind||'',e.teacher_name||'',e.target_ids||'null',e.teacher_id||'');return json(201,{id});}
     const m=route.match(/^\/api\/events\/([a-zA-Z0-9-]+)$/);
     if(m&&['PUT','DELETE'].includes(req.method)){
