@@ -50,3 +50,5 @@
 .calendar .day.past{background:#f0f5ff}.calendar .day.today{background:#dce9ff;box-shadow:inset 0 0 0 2px #365bea}.calendar .day.today .date{background:#365bea;color:white;border-radius:8px}.calendar .event .lesson-students{display:block;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .resource-summary{min-width:0;overflow-wrap:anywhere}.resource-audience{display:inline-block;margin-left:8px;font-size:11px}.resource-row .resource-recipients{color:#526787;line-height:1.6}.resource-row>.pill{flex-shrink:0}
+
+.resource-filters{display:flex;flex-wrap:wrap;gap:16px;padding:18px 22px;border-bottom:1px solid var(--line)}.resource-filters label{display:flex;align-items:center;gap:10px;font-size:14px}.resource-filters select{max-width:65vw}
